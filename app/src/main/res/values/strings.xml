@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">NewFrameWork</string>
+    <string name="permission_request">권한 요청을 취소하시면 진행을 할 수 없습니다.\n[설정] > [권한]에서 권한을 허용하세요.</string>
+    <string name="setting_move">설정화면으로 이동합니다.</string>
+    <string name="common_ok">확인</string>
+    <string name="notice">공지</string>
+    <string name="root">루팅된 단말기에서는 이용 하실 수 없습니다.</string>
+    <string name="failDownload">비정상적으로 다운받은 앱입니다.</string>
+    <string name="errorNetwork">네트워크 사항을 확인해 주세요.</string>
+
+
+</resources>
