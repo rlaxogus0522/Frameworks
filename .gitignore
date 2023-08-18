@@ -48,6 +48,8 @@ Thumbs.db
 *.mov
 *.wmv
 
-buildSrc/*
+buildSrc/build/*
+buildSrc/.gradle/*
+buildSrc/build*
 .gradle/*
 */src/test/*

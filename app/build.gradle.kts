@@ -1,3 +1,4 @@
+import Versions.KOTEST_VERSION
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
 
 plugins {
@@ -39,12 +40,8 @@ android {
 
     buildFeatures {
         dataBinding = true
-        compose = true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.3.2"
-    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -53,6 +50,12 @@ android {
 
     (kotlinOptions as KotlinJvmOptions).apply {
         jvmTarget = JavaVersion.VERSION_1_8.toString()
+    }
+
+    testOptions{
+        unitTests.all {
+            it.useJUnitPlatform()
+        }
     }
 }
 
@@ -67,9 +70,13 @@ dependencies {
     implementation ("androidx.core:core-ktx:1.7.0")
     implementation ("com.google.android.material:material:1.2.1")
     implementation ("androidx.constraintlayout:constraintlayout:2.0.4")
-    testImplementation ("junit:junit:4.+")
-    androidTestImplementation ("androidx.test.ext:junit:1.1.2")
-    androidTestImplementation ("androidx.test.espresso:espresso-core:3.3.0")
+    testImplementation ("junit:junit:")
+    androidTestImplementation ("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation ("androidx.test.espresso:espresso-core:3.5.1")
+    testImplementation("io.kotest:kotest-runner-junit5-jvm:${KOTEST_VERSION}")
+    testImplementation("io.kotest:kotest-assertions-core-jvm:${KOTEST_VERSION}")
+
+    testImplementation ("com.squareup.okhttp3:mockwebserver:4.9.0")
 
 
     implementation(Libs.tedpermission)
@@ -87,7 +94,7 @@ dependencies {
     // Retrofit
     implementation (Retrofit.RETROFIT)
     implementation (Retrofit.CONVERTER_GSON)
-    implementation (Retrofit.CONVERTER_JAXB)
+    implementation (Retrofit.RxJava3CallAdapterFactory)
 
     // dagger hilt
     implementation (Hilt.DAGGER_HILT)
