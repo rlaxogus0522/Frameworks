@@ -1,15 +1,16 @@
 package co.framework.data.mapper
 
-import co.framework.domain.model.TestResponse
+import co.framework.data.model.GitResponse
+import co.framework.domain.model.GitData
 
 object Mapper {
-    fun mapperApi(response : List<TestResponse>?) : List<TestResponse>? {
+    fun mapperApi(response : List<GitResponse>?) : List<GitData>? {
         return response?.toDomain()
     }
 
-    fun List<TestResponse>.toDomain() : List<TestResponse> {
+    fun List<GitResponse>.toDomain() : List<GitData> {
         return this.map {
-            TestResponse(
+            GitData(
                 it.name,
                 it.id,
                 it.date,

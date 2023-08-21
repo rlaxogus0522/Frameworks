@@ -1,9 +1,9 @@
 import Versions.nav_version
 
 object Apps {
-    const val compileSdk = 32
+    const val compileSdk = 33
     const val minSdk = 28
-    const val targetSdk = 31
+    const val targetSdk = 33
     const val versionCode = 101
     const val versionName = "1.0.1"
 }

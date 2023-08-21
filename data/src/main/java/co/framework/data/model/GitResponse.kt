@@ -1,8 +1,8 @@
-package co.framework.domain.model
+package co.framework.data.model
 
 import com.google.gson.annotations.SerializedName
 
-data class TestResponse(
+data class GitResponse(
     @SerializedName("name")
     val name: String,
     @SerializedName("id")
