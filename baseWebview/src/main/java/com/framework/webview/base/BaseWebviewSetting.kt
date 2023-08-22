@@ -1,13 +1,6 @@
-package co.framework.webview.base
+package com.framework.webview.base
 
 import android.content.Context
-import android.os.Build
-import android.util.Log
-import android.webkit.CookieManager
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.widget.Toast
-import co.framework.webview.common.Url
 
 object BaseWebviewSetting {
 

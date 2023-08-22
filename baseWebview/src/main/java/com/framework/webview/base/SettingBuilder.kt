@@ -1,16 +1,17 @@
-package co.framework.webview.base
+package com.framework.webview.base
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DownloadManager
 import android.content.*
-import android.content.pm.PackageManager
+import android.database.Cursor
+import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
-import android.os.Build
-import android.os.Environment
-import android.os.Message
+import android.os.*
+import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
 import android.view.View
@@ -18,17 +19,22 @@ import android.view.ViewGroup
 import android.webkit.*
 import android.widget.Toast
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.app.ActivityCompat
 import androidx.core.content.FileProvider
-import co.framework.webview.common.PermisionCheck
-import co.framework.webview.common.Url
-import co.framework.webview.common.Utils
-import co.framework.webview.commonString.*
-import co.framework.webview.dialog.DevelopPopup
+import androidx.core.net.toUri
+import com.framework.webview.BuildConfig
+import com.framework.webview.common.PermisionCheck
+import com.framework.webview.common.Url
+import com.framework.webview.common.Utils
+import com.framework.webview.commonString.*
+import com.framework.webview.dialog.DevelopPopup
 import com.gun0912.tedpermission.PermissionListener
 import kotlinx.android.synthetic.main.dialog_develop_popup.*
 import java.io.File
-import java.lang.IllegalArgumentException
+import java.net.URLDecoder
+import java.util.*
+import java.util.concurrent.Executors
+import kotlin.concurrent.thread
+import kotlin.reflect.KFunction0
 
 
 //fun String.isEmptyReplace(replace: String): String {
@@ -48,7 +54,68 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
     var mChildWebView: WebView? = null
     lateinit var developPopup: DevelopPopup
     private var downloadReceiver: BroadcastReceiver? = null     //다운로드 완료 리시버
+    lateinit var Function: (Uri) -> Boolean
+    lateinit var FunctionPageFinish: (WebView, String) -> Unit
+    lateinit var FileFunction: (WebView?, ValueCallback<Array<Uri?>>?,WebChromeClient.FileChooserParams?) -> Boolean
 
+    lateinit var FunctionStartDownLoad: (Boolean) -> Unit
+    lateinit var FunctionSetProgress: (Int) -> Unit
+
+    var isPageFinish = false
+
+    private val UPDATE_DOWNLOAD_PROGRESS = 1
+    private var executor = Executors.newFixedThreadPool(1)
+    private val mainHandler = Handler(Looper.getMainLooper()) { msg ->
+        if (msg.what == UPDATE_DOWNLOAD_PROGRESS) {
+            val downloadProgress = msg.arg1
+            Log.d("LLLL", downloadProgress.toString());
+
+            // Update your progress bar here.
+//            progressBar.setProgress(downloadProgress)
+        }
+        true
+    }
+
+
+    /**
+     * Custom URL 스키마 설정
+     */
+    fun customUrlScheme(Function : (Uri) -> Boolean) : T {
+        this.Function = Function
+        return this as T
+    }
+
+    /**
+     * Custom URL 스키마 설정
+     */
+    fun customPageFinished(FunctionPageFinish : (WebView, String) -> Unit) : T {
+        this.FunctionPageFinish = FunctionPageFinish
+        return this as T
+    }
+
+    /**
+     * 다운로드 시작
+     */
+    fun customDownLoadStart(FunctionStartDownLoad : (Boolean) -> Unit) : T {
+        this.FunctionStartDownLoad = FunctionStartDownLoad
+        return this as T
+    }
+
+    /**
+     * 프로그래스 셋팅
+     */
+    fun customSetProgress(FunctionSetProgress : (Int) -> Unit) : T {
+        this.FunctionSetProgress = FunctionSetProgress
+        return this as T
+    }
+
+    /**
+     * Custom URL 스키마 설정
+     */
+    fun customFileChooser(Function : (WebView?, ValueCallback<Array<Uri?>>?,WebChromeClient.FileChooserParams?) -> Boolean) : T {
+        this.FileFunction = Function
+        return this as T
+    }
 
     /**
      * UserAgent 이름 셋팅
@@ -118,7 +185,7 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
      * SAVE_FILE 스키마 변경
      */
     fun customSaveFileIntent(intent : String) : T {
-        SAVE_FILE = intent
+        SAVE_FILE1 = intent
         return this as T
     }
 
@@ -176,7 +243,7 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
      * DEVELOP URL 1
      */
     fun setDevelopDialogUrl1(url : String) : T {
-        Url.OPERATION_URL = url
+        Url.STAGE_URL = url
         return this as T
     }
 
@@ -217,7 +284,7 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
      */
     private fun DevelopDialog() {
             developPopup = DevelopPopup.createDialog(context, "개발 모드", false)
-            developPopup.onRightClick("접속", View.OnClickListener {
+            developPopup.onRightClick(developPopup,"접속", View.OnClickListener {
                 when {
                     developPopup.ck1.isChecked -> {
                         if (!TextUtils.isEmpty(developPopup.et_url.text.toString())) {
@@ -249,6 +316,54 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             developPopup.show()
     }
 
+    /**
+     * DEVELOP 팝업
+     */
+    fun DevelopDialog2(checkAppVersion: KFunction0<Unit>) {
+        developPopup = DevelopPopup.createDialog(context, "개발 모드", false)
+        developPopup.onRightClick(developPopup,"접속", View.OnClickListener {
+            when {
+                developPopup.ck1.isChecked -> {
+                    if (!TextUtils.isEmpty(developPopup.et_url.text.toString())) {
+                        Url.ACCESS_URL = developPopup.et_url.text.toString()
+                    }
+                }
+                developPopup.ck2.isChecked -> {
+                    if (!TextUtils.isEmpty(developPopup.et_url2.text.toString())) {
+                        Url.ACCESS_URL = developPopup.et_url2.text.toString()
+                    }
+                }
+                developPopup.ck3.isChecked -> {
+                    if (!TextUtils.isEmpty(developPopup.et_url3.text.toString())) {
+                        Url.ACCESS_URL = developPopup.et_url3.text.toString()
+                    }
+                }
+            }
+
+            when {
+                developPopup.ck_api_dev.isChecked -> {
+                    Url.API_TARGET_PROD = false
+                }
+
+                developPopup.ck_api_prod.isChecked -> {
+                    Url.API_TARGET_PROD = true
+                }
+            }
+
+            Utils.setPrefString(context, "url1", developPopup.et_url.text.toString())
+            Utils.setPrefString(context, "url2", developPopup.et_url2.text.toString())
+            Utils.setPrefString(context, "url3", developPopup.et_url3.text.toString())
+
+            showDevelopDialog(false)
+
+            developPopup.dismiss()
+
+            checkAppVersion()
+
+        })
+        developPopup.show()
+    }
+
 
 
     inner class InAppWebViewClient : WebViewClient() {
@@ -257,84 +372,103 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             handler: SslErrorHandler,
             error: SslError
         ) {
+            Log.d("TTT", error.toString())
             val builder = AlertDialog.Builder(context)
             builder.setMessage("SSL 페이지 오류 입니다.\n에러코드" + error.primaryError)
             builder.setNegativeButton(
                 "확인"
             ) { dialog: DialogInterface?, which: Int -> handler.cancel() }
             val dialog = builder.create()
-            dialog.show()
+            if(!(context as Activity).isFinishing){
+                dialog.show()
+            }
         }
+
+        override fun onReceivedError(
+            view: WebView?,
+            request: WebResourceRequest?,
+            error: WebResourceError?
+        ) {
+            super.onReceivedError(view, request, error)
+            Log.d("TTTT errorcode", error?.errorCode.toString())
+        }
+
+
 
         override fun onPageFinished(view: WebView, url: String) {
             super.onPageFinished(view, url)
+            if(!isPageFinish) {
+                FunctionPageFinish(view, url)
+                isPageFinish = true
+            }
+
 
             CookieManager.getInstance().flush()
+        }
+
+        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+            super.onPageStarted(view, url, favicon)
         }
 
         override fun shouldOverrideUrlLoading(
             view: WebView?,
             request: WebResourceRequest?
         ): Boolean {
-            var url = ""
-
+            var url =
             if (request == null) {
                 return false
             } else {
-                url = request.url.toString()
+                request.url
             }
+
 
             return customOverride(url)
         }
+
     }
     
     
-    fun customOverride(url : String) : Boolean{
+    fun customOverride(url : Uri) : Boolean{
 
        return when {
+
+           /**
+            * 문자
+            */
+           url.toString().startsWith("sms:") -> {
+               try {
+                   val tmpUrl: String = url.toString().replace("sms", "smsto")
+                   val phoneNum = Uri.parse(tmpUrl)
+                   context.startActivity(Intent(Intent.ACTION_SENDTO, phoneNum).setData(phoneNum))
+               } catch (e: Exception) {
+                   Log.e(TAG, e.toString())
+               }
+               true
+           }
 
             /**
              * 전화 걸기
              */
-            url.startsWith("tel:") -> {
-                val permission = Manifest.permission.CALL_PHONE
-
-                Uri.parse(url).let {
-                    PermisionCheck.setPermission(
-                        object : PermissionListener {
-                            override fun onPermissionGranted() {
-                                if (ActivityCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.CALL_PHONE
-                                    ) != PackageManager.PERMISSION_DENIED
-                                ) {
-                                    val intent = Intent(Intent.ACTION_CALL, it)
-                                    context.startActivity(intent)
-                                    return
-                                }
-                            }
-
-                            override fun onPermissionDenied(deniedPermissions: List<String>) {}
-                        }, permission,
-                        context
-                    )
-                }
+            url.toString().startsWith("tel:") -> {
+                val intent = Intent(Intent.ACTION_DIAL, Uri.parse(url.toString()))
+                context.startActivity(intent)
                 true
             }
 
             /**
              * 외부 URL 링크 이동
              */
-            url.startsWith("$SCHEME_INTENT://${OUT_LINK}", true) -> {
+            url.toString().startsWith("$SCHEME_INTENT://${OUT_LINK}", true) -> {
                 try {
-                    if (url.contains("${OUT_LINK_QUERY_PARAMETER}=")) {
-                        val tempUri = Uri.parse(url)
-                        val outLinkUri =
-                            Uri.parse(tempUri.getQueryParameter(OUT_LINK_QUERY_PARAMETER))
-                        val intent = Intent(Intent.ACTION_VIEW, outLinkUri)
+                    if (url.toString().contains("${OUT_LINK_QUERY_PARAMETER}=")) {
+                        val tempUri = url.toString().replace("$SCHEME_INTENT://${OUT_LINK}?${OUT_LINK_QUERY_PARAMETER}=","").toUri()
+                        val send = URLDecoder.decode( tempUri.toString() , "UTF-8" )
+                        val intent = Intent(Intent.ACTION_VIEW, send.toUri())
                         context.startActivity(intent)
                     }
-                } catch (e: java.lang.Exception) {
+                }  catch (e: java.lang.NullPointerException) {
+                    Log.e(TAG, e.toString())
+                }catch (e: java.lang.Exception) {
                     Log.e(TAG, e.toString())
                 }
 
@@ -346,23 +480,22 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             /**
              *  파일 저장 및 호출 리스너
              */
-            url.startsWith("$SCHEME_INTENT://${SAVE_FILE}", true) -> {
+            url.toString().startsWith("$SCHEME_INTENT://${SAVE_FILE1}", true) || url.toString().startsWith("$SCHEME_INTENT://${SAVE_FILE2}", true) -> {
                 url.let{
                     PermisionCheck.setPermission(
                         object : PermissionListener {
                             override fun onPermissionGranted() {
                                 //read, write 퍼미션 체크
                                 try {
-                                    if (it.contains("${SAVE_FILE_QUERY_PARAMETER}=")) {
-                                        val tempUri = Uri.parse(it)
-                                        var downloadUrl = ""
-                                        if (!tempUri.getQueryParameter(SAVE_FILE_QUERY_PARAMETER).isNullOrEmpty()) {
-                                            downloadUrl = tempUri.getQueryParameter(SAVE_FILE_QUERY_PARAMETER)!!
-                                            onDownloadStart(downloadUrl)
-                                        }
+                                    if (it.toString().contains("${SAVE_FILE_QUERY_PARAMETER}=")) {
+                                            onDownloadStart(it.getQueryParameter(SAVE_FILE_QUERY_PARAMETER)!!, true)
                                     }
+                                } catch (e: java.lang.NullPointerException) {
+                                    FunctionStartDownLoad(false)
+                                    Log.e("SetttingBuilder",e.message.toString())
                                 } catch (e: java.lang.Exception) {
-                                    e.printStackTrace()
+                                    FunctionStartDownLoad(false)
+                                    Log.e("SetttingBuilder",e.message.toString())
                                 }
                             }
 
@@ -381,7 +514,7 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             /**
              * 파일 멀티 파트 전송
              */
-            url.startsWith("$SCHEME_INTENT://${UPLOAD_FILE}", true) -> {
+            url.toString().startsWith("$SCHEME_INTENT://${UPLOAD_FILE}", true) -> {
 
                 true
             }
@@ -389,12 +522,12 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             /**
              * 스토어 페이지 이동
              */
-            url.startsWith("$SCHEME_INTENT://${MOVE_STORE}", true) -> {
-                if (url.contains("${MOVE_STORE_QUERY_PARAMETER}=")) {
-                    val tempUri = Uri.parse(url)
+            url.toString().startsWith("$SCHEME_INTENT://${MOVE_STORE}", true) -> {
+                if (url.toString().contains("${MOVE_STORE_QUERY_PARAMETER}=")) {
+                    val tempUri = url
                     val packageName = tempUri.getQueryParameter(MOVE_STORE_QUERY_PARAMETER)
                     val intent = Intent(Intent.ACTION_VIEW)
-                    intent.data = Uri.parse("market://details?id=$packageName")
+                    intent.data = Uri.parse(checkUri("market://details?id=$packageName"))
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     context.startActivity(intent)
                 }
@@ -402,23 +535,29 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             }
 
 
-            else -> false
+            else -> Function(url)
         }
     }
 
+    fun checkUri(str : String) : String{
+        val Filter = "[\\\\@#$%]"
+        return str.replace(Filter.toRegex(),"")
+    }
+
     /** 파일 다운로드 시작 */
-    private fun onDownloadStart(url: String) {
+    @SuppressLint("Range")
+    private fun onDownloadStart(url: String, isOpen : Boolean) {
         try {
             val mtype = MimeTypeMap.getSingleton()
             val downloadManager =
                 context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val downloadUri = Uri.parse(url)
+            val downloadUri = url.toUri()
             val fileNameList = url.split("/").toTypedArray()
-            val fileName: String
-
-            fileName = try {
-                fileNameList[fileNameList.size - 1]
-            } catch (e: java.lang.Exception) {
+            val fileName: String = try {
+                URLDecoder.decode(fileNameList[fileNameList.size - 1], "EUC-KR")
+            } catch (e: java.lang.NullPointerException) {
+                return
+            }catch (e: java.lang.Exception) {
                 return
             }
 
@@ -431,13 +570,10 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             request.setTitle(fileName)
             request.setDescription(url)
             request.setMimeType(mimeType)
-            request.setDestinationInExternalPublicDir(
-                Environment.DIRECTORY_DOWNLOADS,
-                "/$FOLDER_NAME/$fileName"
-            )
+            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
 
             val path =
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS + "/$FOLDER_NAME")
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                     .absoluteFile
             path.mkdirs()
             if (isDownloadFileExists(path.absolutePath + "/" + fileName)) {
@@ -450,32 +586,81 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
                 override fun onReceive(context: Context, intent: Intent) {
                     try {
                         context.unregisterReceiver(downloadReceiver)
+                        FunctionStartDownLoad(false)
                         if (!(context as Activity).isDestroyed) {
+                            webview?.loadUrl("javascript:hideLoader()")
                             Toast.makeText(
                                 context,
                                 "$fileName\n다운로드 완료",
                                 Toast.LENGTH_SHORT
                             ).show()
-                            openFile(path.absolutePath, fileName)
+                            if(isOpen)
+                                openFile(path.absolutePath, fileName)
                             if (mChildWebView != null) {
                                 closeChildWebView()
                             }
                         }
-                    } catch (e: java.lang.Exception) {
+                    } catch (e: java.lang.NullPointerException) {
+                        FunctionStartDownLoad(false)
+                        Log.e(TAG, e.toString())
+                    }catch (e: java.lang.Exception) {
+                        FunctionStartDownLoad(false)
                         Log.e(TAG, e.toString())
                     }
                 }
             }
             context.registerReceiver(downloadReceiver, completeFilter)
-            downloadManager.enqueue(request)
+            val downloadId = downloadManager.enqueue(request)
+            getDownloadStatus(downloadId,downloadManager)
+        } catch (e: java.lang.NullPointerException) {
+            Log.e(TAG, e.toString())
+            FunctionStartDownLoad(false)
+            Toast.makeText(context, "다운로드 실패하였습니다.", Toast.LENGTH_SHORT).show()
+            PermisionCheck.setPermission(object : PermissionListener {
+                override fun onPermissionGranted() {}
+                override fun onPermissionDenied(arrayList: List<String>) {}
+            }, Manifest.permission.WRITE_EXTERNAL_STORAGE, context)
         } catch (e: java.lang.Exception) {
             Log.e(TAG, e.toString())
+            FunctionStartDownLoad(false)
             Toast.makeText(context, "다운로드 실패하였습니다.", Toast.LENGTH_SHORT).show()
             PermisionCheck.setPermission(object : PermissionListener {
                 override fun onPermissionGranted() {}
                 override fun onPermissionDenied(arrayList: List<String>) {}
             }, Manifest.permission.WRITE_EXTERNAL_STORAGE, context)
         }
+    }
+
+
+    @SuppressLint("Range")
+    fun getDownloadStatus(DownloadManagerId: Long, downloadManager: DownloadManager){
+        thread(start = true) {
+            var downloading = true
+            while (downloading){
+                val query = DownloadManager.Query()
+                query.setFilterById(DownloadManagerId)
+
+                val cursor = downloadManager.query(query)
+                if(cursor.moveToFirst()){
+                    val bytesDownloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                    val bytesTotal = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+
+                    if(cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)) == DownloadManager.STATUS_SUCCESSFUL){
+                        downloading = false
+                    }else if(cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)) == DownloadManager.STATUS_FAILED){
+                        downloading = false
+                    }
+
+                    if(bytesTotal != 0){
+                        val progress = ((bytesDownloaded * 100L)/bytesTotal).toInt()
+                        FunctionSetProgress(progress)
+                    }
+
+                    cursor.close()
+                }
+            }
+        }
+
     }
 
     /** 다운로드 파일 열기 */
@@ -486,24 +671,35 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
         try {
             val file = File("$path/$filename")
             val map = MimeTypeMap.getSingleton()
-            //다운로드 리스너를 거쳐 들어오면 확장자가 ""로 떨어져 직접 확장자를 구하는 것으로 변경
-//            val ext = MimeTypeMap.getFileExtensionFromUrl(file.name)
-            val ext = file.toString().substring(file.toString().lastIndexOf(".") + 1).toLowerCase()
+            val ext = MimeTypeMap.getFileExtensionFromUrl(file.name)
             var type = map.getMimeTypeFromExtension(ext)
-            if (type == null) type = "*/*"
+            if (type == null) {
+                type = "*/*"
+                if (file.name.endsWith(".jpg")) {
+                    type = map.getMimeTypeFromExtension("jpg")
+                } else if (file.name.endsWith(".png")) {
+                    type = map.getMimeTypeFromExtension("png")
+                } else if (file.name.endsWith(".jpeg")) {
+                    type = map.getMimeTypeFromExtension("jpeg")
+                } else if (file.name.endsWith(".tiff")) {
+                    type = map.getMimeTypeFromExtension("tiff")
+                } else if (file.name.endsWith(".tif")) {
+                    type = map.getMimeTypeFromExtension("tif")
+                }
+            }
             val intent = Intent(Intent.ACTION_VIEW)
+            //			intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             //Uri data = Uri.fromFile(file);
             val data = FileProvider.getUriForFile(
                 context,
-                context.applicationContext.packageName
-                    .toString() + PROVIDER,
+                PROVIDER,
                 file
             )
             intent.setDataAndType(data, type)
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             context.startActivity(intent)
         } catch (e: java.lang.Exception) {
-            Log.e(TAG, e.toString())
+            e.printStackTrace()
         }
     }
 
@@ -524,6 +720,24 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
 
     //웹뷰에 사용하는 chromeClient 특정 팝업의 예외처리, Geolocation API, 파일 선택, 이미지 선택
     inner class InAppChromeClient : WebChromeClient() {
+
+        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+            if(newProgress == 100){
+                try {
+                    if(!isPageFinish){
+                        FunctionPageFinish(view!!, view.url!!)
+                        isPageFinish = true
+                    }
+
+                }catch (e : Exception){
+                    e.printStackTrace()
+                }
+            }
+        }
+        override fun onPermissionRequest(request: PermissionRequest?) {
+            request?.grant(request.resources)
+        }
+
         override fun onGeolocationPermissionsShowPrompt(
             origin: String,
             callback: GeolocationPermissions.Callback
@@ -543,7 +757,7 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             val url = result.extra
             if (checkOutLink(url)) {
                 val i = Intent(Intent.ACTION_VIEW)
-                i.data = Uri.parse(url)
+                i.data = Uri.parse(url!!)
                 context.startActivity(i)
                 return false
             }
@@ -554,6 +768,14 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
                     override fun onCloseWindow(window: WebView) {
                         super.onCloseWindow(window)
                         closeChildWebView()
+                    }
+
+                    override fun onShowFileChooser(
+                        webView: WebView?,
+                        filePathCallback: ValueCallback<Array<Uri?>>?,
+                        fileChooserParams: FileChooserParams?
+                    ): Boolean {
+                        return FileFunction(webView, filePathCallback, fileChooserParams)
                     }
                 }
                 val settings: WebSettings = it.settings
@@ -567,7 +789,7 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
-                clRoot!!.addView(it)
+                clRoot?.addView(it)
                 val transport = resultMsg.obj as WebView.WebViewTransport
                 transport.webView = it
                 resultMsg.sendToTarget()
@@ -576,12 +798,22 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             return true
         }
 
+        override fun onShowFileChooser(
+            webView: WebView?,
+            filePathCallback: ValueCallback<Array<Uri?>>?,
+            fileChooserParams: FileChooserParams?
+        ): Boolean {
+            return FileFunction(webView, filePathCallback, fileChooserParams)
+        }
     }
+
+
+
 
     fun closeChildWebView() {
         mChildWebView?.let {
             it.destroy()
-//            cl_root.removeView(it)
+            clRoot?.removeView(it)
             mChildWebView = null
         }
     }
@@ -595,6 +827,7 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
     }
 
 
+    @SuppressLint("SetJavaScriptEnabled")
     protected fun setWebViewSetting() {
 
         when {
@@ -614,34 +847,43 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
 
             else -> {
 
-                if(showDevelopDialog){
-                    DevelopDialog()
-                    return
-                }
-
-                webview!!.webViewClient = InAppWebViewClient()
-                webview!!.webChromeClient = InAppChromeClient()
+                if(BuildConfig.DEBUG)
+                    WebView.setWebContentsDebuggingEnabled(true)
 
 
-                val settings: WebSettings = webview!!.settings
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.pluginState = WebSettings.PluginState.ON
-                settings.setSupportMultipleWindows(true)
-                settings.javaScriptCanOpenWindowsAutomatically = true
-                settings.allowFileAccess = true
-                settings.setGeolocationEnabled(true)
-                settings.setSupportZoom(true)
-                settings.builtInZoomControls = true
-                // 가로에 맞춰서 전체 화면 다 보이게 --cerick--
-                settings.loadWithOverviewMode = true
-                settings.useWideViewPort = true
-                settings.setAppCacheEnabled(true)
-                settings.userAgentString =
-                    settings.userAgentString + " " + "${userAgent}-app-Agent : " + appVersion + " " + "${userAgent}-app-Platform : A " + Build.VERSION.RELEASE
-                Log.d(TAG, settings.userAgentString)
 
-                webview!!.loadUrl(Url.ACCESS_URL)
+
+                webview?.webViewClient = InAppWebViewClient()
+                webview?.webChromeClient = InAppChromeClient()
+
+
+                val settings: WebSettings? = webview?.settings
+                settings?.javaScriptEnabled = true
+                settings?.setSupportZoom(true)
+                settings?.setGeolocationEnabled(true)
+                settings?.allowFileAccess = true
+                settings?.allowFileAccessFromFileURLs = true
+                settings?.allowUniversalAccessFromFileURLs = true
+                settings?.useWideViewPort = true
+                settings?.domStorageEnabled = true
+                settings?.setSupportMultipleWindows(true)
+                settings?.textZoom = 100
+                settings?.userAgentString =
+                    settings?.userAgentString + " " + "${userAgent}-app-Agent : " + appVersion + " " + "${userAgent}-app-Platform : A " + Build.VERSION.RELEASE + "/GA_Android"
+                Log.d(TAG, settings?.userAgentString.toString())
+
+//                settings?.cacheMode = WebSettings.LOAD_NO_CACHE
+                settings?.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                val cookieManager =
+                    CookieManager.getInstance()
+                cookieManager.setAcceptCookie(true)
+                cookieManager.setAcceptThirdPartyCookies(webview, true)
+
+                webview?.setLayerType(View.LAYER_TYPE_HARDWARE,null)
+                webview?.setVerticalScrollbarOverlay(false)
+                webview?.clearCache(true)
+                webview?.clearHistory()
+
             }
         }
 

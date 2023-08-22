@@ -1,4 +1,4 @@
-package co.framework.webview.commonString
+package com.framework.webview.commonString
 
 var SCHEME_INTENT = ""
 
@@ -7,8 +7,9 @@ var OUT_LINK = "outLink"
 var OUT_LINK_QUERY_PARAMETER = "url"
 
 
-var SAVE_FILE = "saveFile"
-var SAVE_FILE_QUERY_PARAMETER = "downUrl"
+var SAVE_FILE1 = "openFile"
+var SAVE_FILE2 = "fileDownload"
+var SAVE_FILE_QUERY_PARAMETER = "url"
 
 
 var UPLOAD_FILE = "uploadFile"

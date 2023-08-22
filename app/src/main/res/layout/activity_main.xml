@@ -12,7 +12,6 @@
 
 
 <androidx.constraintlayout.widget.ConstraintLayout
-
     tools:context = ".view.MainActivity"
     android:id="@+id/cl_root"
     android:layout_width="match_parent"
@@ -23,30 +22,26 @@
         android:layout_width="200dp"
         android:layout_height="wrap_content"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/btn_test"
-        app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"/>
 
     <Button
-        android:id="@+id/btn_test"
+        android:id="@+id/btn_Get"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        android:onClick="@{activity::clickTestBtn}"
-        android:text="Test"/>
+        app:layout_constraintTop_toBottomOf="@id/et_name"
+        android:onClick="@{activity::clickGetGitDataBtn}"
+        android:text="Get"/>
 
-    <TextView
-        android:id="@+id/tv_response"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textColor="@color/black"
-        app:layout_constraintTop_toBottomOf="@id/btn_test"
+    <WebView
+        android:id="@+id/wv_main"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/btn_Get"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        android:layout_marginTop="50dp"/>
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginTop="10dp"/>
 
 
 </androidx.constraintlayout.widget.ConstraintLayout></layout>

@@ -1,11 +1,11 @@
-package co.framework.webview.common
+package com.framework.webview.common
 
 
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import com.gun0912.tedpermission.PermissionListener
-import com.gun0912.tedpermission.TedPermission
+import com.gun0912.tedpermission.normal.TedPermission
 
 object PermisionCheck {
     fun setPermission(
@@ -13,7 +13,7 @@ object PermisionCheck {
         permissions: String?,
         context : Context
     ) {
-        TedPermission.with(context)
+        TedPermission.create()
             .setPermissionListener(listener)
             .setDeniedMessage("권한 요청을 취소하시면 진행을 할 수 없습니다.\\n[설정] > [권한]에서 권한을 허용하세요.")
             .setPermissions(permissions)

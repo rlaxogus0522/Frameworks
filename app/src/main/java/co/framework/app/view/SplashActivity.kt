@@ -16,15 +16,14 @@ class SplashActivity : BaseActivity<ActivitySplashBinding>(R.layout.activity_spl
 
     override fun init() {
         binding.activity = this
+        startTime = System.currentTimeMillis()
         checkSecurity()
     }
 
     fun checkSecurity(){
-        startTime = System.currentTimeMillis()
-
         BaseSecuritySetting.with(this)
-            .checkForgery(true)
-            .checkRooting(true)
+            .checkForgery(true) // 해쉬값 검사를 통한 앱 위변조 검사
+            .checkRooting(true) // 기기 루팅 상태 검사
             .start().let {
                 goMain()
             }

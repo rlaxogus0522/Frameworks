@@ -1,4 +1,4 @@
-package co.framework.webview.common
+package com.framework.webview.common
 
 import android.annotation.SuppressLint
 import android.content.ContentUris
@@ -35,7 +35,7 @@ object Utils {
         try {
             pi = context.packageManager.getPackageInfo(context.packageName, 0)
         } catch (e: PackageManager.NameNotFoundException) {
-            e.printStackTrace()
+            Log.e("Utils", e.message.toString())
         }
         return pi?.versionName
     }
@@ -115,16 +115,16 @@ object Utils {
         val prefs: SharedPreferences = context.getSharedPreferences(key, Context.MODE_PRIVATE)
         return when(key){
             "url1" -> {
-                prefs.getString(key, Url.OPERATION_URL)
+                prefs.getString(key, Url.ACCESS_URL)
             }
             "url2" -> {
                 prefs.getString(key, Url.DEVELOP_URL)
             }
             "url3" -> {
-                prefs.getString(key, Url.ETC_URL)
+                prefs.getString(key, Url.STAGE_URL)
             }
             else -> {
-                prefs.getString(key, Url.OPERATION_URL)
+                prefs.getString(key, Url.ACCESS_URL)
             }
         }
     }
@@ -142,8 +142,8 @@ object Utils {
         ).absolutePath
     }
 
-    fun uriToBitmap(context: Context, selectedImage: Uri?): Bitmap? {
-        val imageStream = context.contentResolver.openInputStream(selectedImage!!)
+    fun uriToBitmap(context: Context, selectedImage: Uri): Bitmap? {
+        val imageStream = context.contentResolver.openInputStream(selectedImage)
         return BitmapFactory.decodeStream(imageStream)
     }
 
@@ -167,13 +167,16 @@ object Utils {
 
     @Throws(IOException::class)
     private fun rotateImageIfRequired(img: Bitmap, selectedImage: Uri): Bitmap? {
-        val ei = ExifInterface(selectedImage.path!!)
-        return when (ei.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-            ExifInterface.ORIENTATION_ROTATE_90 -> rotateImage(img, 90)
-            ExifInterface.ORIENTATION_ROTATE_180 -> rotateImage(img, 180)
-            ExifInterface.ORIENTATION_ROTATE_270 -> rotateImage(img, 270)
-            else -> img
+        selectedImage.path?.let {
+            val ei = ExifInterface(it)
+            return when (ei.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> rotateImage(img, 90)
+                ExifInterface.ORIENTATION_ROTATE_180 -> rotateImage(img, 180)
+                ExifInterface.ORIENTATION_ROTATE_270 -> rotateImage(img, 270)
+                else -> img
+            }
         }
+        return img
     }
 
     private fun rotateImage(img: Bitmap, degree: Int): Bitmap? {
@@ -182,28 +185,6 @@ object Utils {
         val rotatedImg = Bitmap.createBitmap(img, 0, 0, img.width, img.height, matrix, true)
         img.recycle()
         return rotatedImg
-    }
-
-
-    @JvmStatic
-    @Throws(IOException::class)
-    fun handleSamplingAndRotationBitmap(context: Context, selectedImage: Uri?): Bitmap? {
-        val MAX_HEIGHT = 1024
-        val MAX_WIDTH = 1024
-        // First decode with inJustDecodeBounds=true to check dimensions
-        val options = BitmapFactory.Options()
-        options.inJustDecodeBounds = true
-        var imageStream = context.contentResolver.openInputStream(selectedImage!!)
-        BitmapFactory.decodeStream(imageStream, null, options)
-        imageStream!!.close()
-        // Calculate inSampleSize
-        options.inSampleSize = calculateInSampleSize(options, MAX_WIDTH, MAX_HEIGHT)
-        // Decode bitmap with inSampleSize set
-        options.inJustDecodeBounds = false
-        imageStream = context.contentResolver.openInputStream(selectedImage)
-        var img = BitmapFactory.decodeStream(imageStream, null, options)
-        img = rotateImageIfRequired(img!!, selectedImage)
-        return img
     }
 
     @JvmStatic
@@ -217,13 +198,13 @@ object Utils {
                     (Environment.getExternalStorageDirectory().toString() + "/"
                             + split[1])
                 } else {
-                    val SDcardpath: String = getRemovableSDCardPath(context)?.split("/Android")!!.get(0)
+                    val SDcardpath: String? = getRemovableSDCardPath(context)?.split("/Android")?.get(0)
                     SDcardpath + "/" + split[1]
                 }
             } else if (isDownloadsDocument(uri)) {
                 val id: String = DocumentsContract.getDocumentId(uri)
                 val contentUri: Uri = ContentUris.withAppendedId(
-                    Uri.parse("content://downloads/public_downloads"),
+                    Uri.parse(checkUri("content://downloads/public_downloads")),
                     java.lang.Long.valueOf(id))
                 return context?.let { getDataColumn(it, contentUri, null, null) }
             } else if (isMediaDocument(uri)) {
@@ -262,14 +243,19 @@ object Utils {
         val column = "_data"
         val projection = arrayOf(column)
         try {
-            cursor = context.contentResolver.query(
-                uri!!, projection,
-                selection, selectionArgs, null
-            )
-            if (cursor != null && cursor.moveToFirst()) {
-                val index: Int = cursor.getColumnIndexOrThrow(column)
-                return cursor.getString(index)
+            uri?.let {
+                cursor = context.contentResolver.query(
+                    it, projection,
+                    selection, selectionArgs, null
+                )
+                if (cursor != null && cursor?.moveToFirst() == true) {
+                    val index: Int? = cursor?.getColumnIndexOrThrow(column)
+                    index?.let {
+                        return cursor?.getString(it)
+                    }
+                }
             }
+
         } finally {
             cursor?.close()
         }
@@ -277,8 +263,11 @@ object Utils {
     }
 
     private fun getRemovableSDCardPath(context: Context?): String? {
-        val storages: Array<File?> = ContextCompat.getExternalFilesDirs(context!!, null)
-        return if (storages.size > 1 && storages[0] != null && storages[1] != null) storages[1].toString() else ""
+        if(context != null){
+            val storages: Array<File?> = ContextCompat.getExternalFilesDirs(context, null)
+            return if (storages.size > 1 && storages[0] != null && storages[1] != null) storages[1].toString() else ""
+        }
+        return ""
     }
 
     private fun isExternalStorageDocument(uri: Uri): Boolean {
@@ -301,19 +290,6 @@ object Utils {
             .authority
     }
 
-    fun deleteFile(filePath: List<String>) {
-        try {
-            filePath.forEach { path ->
-                val imgFile = File(path)
-                if (imgFile.exists()) {
-                    imgFile.delete()
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("",e.localizedMessage)
-        }
-    }
-
     @JvmName("getRealPathFromURI1")
     fun getRealPathFromURI(context: Context, uri: Uri): String? {
 
@@ -329,13 +305,14 @@ object Utils {
                     (Environment.getExternalStorageDirectory().toString() + "/"
                             + split[1])
                 } else {
-                    val SDcardpath = getRemovableSDCardPath(context)?.split("/Android".toRegex())!!.toTypedArray()[0]
+                    val SDcardpath = getRemovableSDCardPath(context)?.split("/Android".toRegex())?.toTypedArray()
+                        ?.get(0)
                     SDcardpath + "/" + split[1]
                 }
             } else if (isDownloadsDocument(uri)) {
                 val id = DocumentsContract.getDocumentId(uri)
                 val contentUri = ContentUris.withAppendedId(
-                    Uri.parse("content://downloads/public_downloads"),
+                    Uri.parse(checkUri("content://downloads/public_downloads")),
                     java.lang.Long.valueOf(id))
                 return getDataColumn(context, contentUri, null, null)
             } else if (isMediaDocument(uri)) {
@@ -381,6 +358,8 @@ object Utils {
             }
             file.delete()
             return true
+        } catch (e: IOException) {
+            return false
         } catch (e: Exception) {
             return false
         }
@@ -393,9 +372,16 @@ object Utils {
             val isConnected: Boolean = activeNetwork?.isConnectedOrConnecting == true
 
             return isConnected
+        } catch ( e: NullPointerException ){
+            Log.e( "",e.localizedMessage )
         } catch ( e: Exception ){
             Log.e( "",e.localizedMessage )
         }
         return false
+    }
+
+    fun checkUri(str : String) : String{
+        val Filter = "[\\\\@#$%]"
+        return str.replace(Filter.toRegex(),"")
     }
 }
