@@ -18,7 +18,7 @@ android {
     defaultConfig {
         minSdkVersion(Apps.minSdk)
         targetSdkVersion(Apps.targetSdk)
-        versionCode = Apps.versionsCode
+        versionCode = Apps.versionCode
         versionName = Apps.versionName
         multiDexEnabled = true
         setProperty("archivesBaseName", "$applicationId-v$versionName($versionCode)")
