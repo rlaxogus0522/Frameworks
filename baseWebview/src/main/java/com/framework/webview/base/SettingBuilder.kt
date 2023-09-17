@@ -23,28 +23,23 @@ import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.framework.webview.BuildConfig
 import com.framework.webview.common.PermisionCheck
+import com.framework.webview.common.PermisionCheck.setPermission
+import com.framework.webview.common.PermissionListener
 import com.framework.webview.common.Url
 import com.framework.webview.common.Utils
 import com.framework.webview.commonString.*
 import com.framework.webview.dialog.DevelopPopup
-import com.gun0912.tedpermission.PermissionListener
 import kotlinx.android.synthetic.main.dialog_develop_popup.*
 import java.io.File
+import java.io.IOException
 import java.net.URLDecoder
 import java.util.*
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 import kotlin.reflect.KFunction0
 
-
-//fun String.isEmptyReplace(replace: String): String {
-//    return if (TextUtils.isEmpty(this))
-//        replace
-//    else
-//        this
-//}
 @Suppress("UNCHECKED_CAST")
-abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(private val context: Context) {
+abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(private val context: Context,private val act: Activity) {
     private val TAG = SettingBuilder::class.simpleName
     private var userAgent : String? = null
     private var webview : WebView? = null
@@ -60,6 +55,17 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
 
     lateinit var FunctionStartDownLoad: (Boolean) -> Unit
     lateinit var FunctionSetProgress: (Int) -> Unit
+    val PERMISSION_CODE_WRITE_EXTERNAL_STORAGE = 1001
+    val REQUIRED_PERMISSIONS: Array<String> = if (Build.VERSION.SDK_INT >= 33) {
+        arrayOf(
+            Manifest.permission.READ_MEDIA_IMAGES
+        )
+    } else {
+        arrayOf(
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        )
+    }
 
     var isPageFinish = false
 
@@ -482,30 +488,26 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
              */
             url.toString().startsWith("$SCHEME_INTENT://${SAVE_FILE1}", true) || url.toString().startsWith("$SCHEME_INTENT://${SAVE_FILE2}", true) -> {
                 url.let{
-                    PermisionCheck.setPermission(
-                        object : PermissionListener {
-                            override fun onPermissionGranted() {
-                                //read, write 퍼미션 체크
-                                try {
-                                    if (it.toString().contains("${SAVE_FILE_QUERY_PARAMETER}=")) {
-                                            onDownloadStart(it.getQueryParameter(SAVE_FILE_QUERY_PARAMETER)!!, true)
-                                    }
-                                } catch (e: java.lang.NullPointerException) {
-                                    FunctionStartDownLoad(false)
-                                    Log.e("SetttingBuilder",e.message.toString())
-                                } catch (e: java.lang.Exception) {
-                                    FunctionStartDownLoad(false)
-                                    Log.e("SetttingBuilder",e.message.toString())
+                    setPermission(act = act,  listener = object : PermissionListener {
+                        override fun onPermissionGranted() {
+                            //read, write 퍼미션 체크
+                            try {
+                                if (it.toString().contains("${SAVE_FILE_QUERY_PARAMETER}=")) {
+                                    onDownloadStart(it.getQueryParameter(SAVE_FILE_QUERY_PARAMETER)!!, true)
                                 }
+                            } catch (e: java.lang.NullPointerException) {
+                                FunctionStartDownLoad(false)
+                                Log.e("SetttingBuilder",e.message.toString())
+                            } catch (e: java.lang.Exception) {
+                                FunctionStartDownLoad(false)
+                                Log.e("SetttingBuilder",e.message.toString())
                             }
+                        }
 
-                            override fun onPermissionDenied(deniedPermissions: List<String>) {
-                                (context as Activity).finish()
-                            }
-                        },
-                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                        context
-                    )
+                        override fun onPermissionDenied(deniedPermissions: List<String?>?) {
+                            (context as Activity).finish()
+                        }
+                    }, REQUIRED_PERMISSIONS, PERMISSION_CODE_WRITE_EXTERNAL_STORAGE)
                 }
 
                 true
@@ -538,6 +540,7 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             else -> Function(url)
         }
     }
+
 
     fun checkUri(str : String) : String{
         val Filter = "[\\\\@#$%]"
@@ -616,18 +619,22 @@ abstract class SettingBuilder<T : SettingBuilder<BaseWebviewSetting.Builder>>(pr
             Log.e(TAG, e.toString())
             FunctionStartDownLoad(false)
             Toast.makeText(context, "다운로드 실패하였습니다.", Toast.LENGTH_SHORT).show()
-            PermisionCheck.setPermission(object : PermissionListener {
+            setPermission(act = act,  listener = object : PermissionListener {
                 override fun onPermissionGranted() {}
-                override fun onPermissionDenied(arrayList: List<String>) {}
-            }, Manifest.permission.WRITE_EXTERNAL_STORAGE, context)
+                override fun onPermissionDenied(deniedPermissions: List<String?>?) {
+                    TODO("Not yet implemented")
+                }
+            }, REQUIRED_PERMISSIONS, PERMISSION_CODE_WRITE_EXTERNAL_STORAGE)
         } catch (e: java.lang.Exception) {
             Log.e(TAG, e.toString())
             FunctionStartDownLoad(false)
             Toast.makeText(context, "다운로드 실패하였습니다.", Toast.LENGTH_SHORT).show()
-            PermisionCheck.setPermission(object : PermissionListener {
+            setPermission(act = act,  listener = object : PermissionListener {
                 override fun onPermissionGranted() {}
-                override fun onPermissionDenied(arrayList: List<String>) {}
-            }, Manifest.permission.WRITE_EXTERNAL_STORAGE, context)
+                override fun onPermissionDenied(deniedPermissions: List<String?>?) {
+                    TODO("Not yet implemented")
+                }
+            }, REQUIRED_PERMISSIONS, PERMISSION_CODE_WRITE_EXTERNAL_STORAGE)
         }
     }
 

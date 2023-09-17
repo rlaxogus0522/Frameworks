@@ -34,7 +34,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(R.layout.activity_main) {
         observeViewModel() // observe 셋팅
 
         // WebView형 프로젝트 Default 셋팅
-        val webviewSetting = BaseWebviewSetting.with(this)
+        val webviewSetting = BaseWebviewSetting.with(this, this)
             .setMainUrl(ACCESS_URL) // load url 셋팅
             .setWebView(binding.wvMain)// webview 셋팅
             .setConstraintLayoutRoot(binding.clRoot)
